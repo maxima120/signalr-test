@@ -1,9 +1,7 @@
 import { Component, Inject } from '@angular/core';
 import { HttpClient, HttpEvent, HttpHandler, HttpRequest } from '@angular/common/http';
 import { HttpTransportType, HubConnection, HubConnectionBuilder } from "@microsoft/signalr";
-import { Observable } from 'rxjs';
-import { tap } from 'rxjs/operators';
-import { stringify } from '@angular/compiler/src/util';
+import { formatDate } from '@angular/common';
 
 @Component({
   selector: 'app-fetch-data',
@@ -13,13 +11,31 @@ export class FetchDataComponent {
   public forecasts: WeatherForecast[];
   hub: HubConnection;
 
+  count: number;
+  startSw: number;
+
   constructor(http: HttpClient, @Inject('BASE_URL') baseUrl: string) {
 
     this.hub = new HubConnectionBuilder()
       .withUrl("/newshub")
       .build();
 
-    this.hub.on("servermessage", (m: string) => { console.log(m); });
+    this.count = 0;
+
+    this.hub.on("servermessage", (m: string) =>
+    {
+      //console.log(`${formatDate(new Date(Date.now()), "HH:mm:ss.SSSSSS", "en-GB")} ${m}`);
+      if (this.count == 0)
+        this.startSw = Date.now();
+
+      this.count++;
+
+      if (this.count == 1000) {
+        console.log(`${Date.now() - this.startSw}`);
+        console.log(`${formatDate(new Date(Date.now()), "HH:mm:ss.SSSSSS", "en-GB")} ${m}`);
+      }
+
+    });
 
     this.hub.start()
       .then(() => {
@@ -28,10 +44,10 @@ export class FetchDataComponent {
 
           this.forecasts = result;
 
-        }, error => console.log('Weather get error: ' + stringify(error)));
+        }, error => console.log('Weather get error: ' + error.toString()));
 
       })
-      .catch(err => console.log('MessageHub connection error: ' + stringify(err)));
+      .catch(err => console.log('MessageHub connection error: ' + err.toString()));
   }
 
   //intercept(req: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {

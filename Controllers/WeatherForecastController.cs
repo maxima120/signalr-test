@@ -45,13 +45,38 @@ namespace signalr_test.Controllers
         }
 
         [HttpGet]
-        [Route("{connectionId}")]
+        [Route("{connectionId}")] // defaulthublifetimemanager
         public IEnumerable<WeatherForecast> GetForSignalR(string connectionId)
         {
             SurrogateAuth(connectionId);
 
             // NB: in real app - send particular data to particular users (by connection)
-            var timerManager = new TimerManager(() => hub.Clients.Client(NewsHub.Connected.Keys.First()).SendAsync("servermessage", DateTime.Now.Ticks.ToString()));
+            var timerManager = new TimerManager(() =>
+            {
+                Trace.WriteLine($"Server start: {DateTime.Now.TimeOfDay}");
+
+                var id = NewsHub.Connected.Keys.First();
+                var msg = "go!123.344!22";
+                var sw = Stopwatch.StartNew();
+
+                //Parallel.For(0, 20, (x) =>
+                //{
+                    for (int i = 0; i < 1000; i++)
+                    {
+                        var p = hub.Clients.Client(id);
+                        SendAsync(p, msg);
+                    }
+                //});
+
+                // 735ms - 597ms - single thread
+                // 260 ms - parallel for :-O
+                // without client logging: 80ms from server start to client finish, pure time on client - 75ms (seems 5ms to prepare something or the other)
+                //    same as above - second run: 32ms from server start to client finish, pure time on client - 30ms
+
+                Debug.WriteLine($"done: {sw.Elapsed}");
+
+                //hub.Clients.Client(NewsHub.Connected.Keys.First()).SendAsync("servermessage", DateTime.Now.Ticks.ToString());
+            });
 
             var rng = new Random();
             return Enumerable.Range(1, 5).Select(index => new WeatherForecast
@@ -62,10 +87,15 @@ namespace signalr_test.Controllers
             })
             .ToArray();
         }
+
+        async Task SendAsync(IClientProxy p, string msg)
+        {
+            await p.SendAsync("servermessage", msg);
+        }
+
         private void SurrogateAuth(string connectionId)
         {
             var userId = GetApiUserSimple(this.HttpContext);
-            var token = DateTime.Now.Ticks;
 
             var x = NewsHub.Connected.Values.SingleOrDefault(i => i.UserId == userId);
             if (x != null)
@@ -106,6 +136,9 @@ namespace signalr_test.Controllers
         }
         public void Execute(object stateInfo)
         {
+            // stop for now - cant debug with dotpeek
+            timer.Change(-1, -1);
+
             action();
         }
     }
